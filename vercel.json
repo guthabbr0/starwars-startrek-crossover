@@ -1,6 +1,7 @@
 {
   "framework": "vite",
-  "buildCommand": "npm run build",
+  "installCommand": "npm ci --no-fund",
+  "buildCommand": "npm test && npm run build",
   "outputDirectory": "dist",
   "headers": [
     {
