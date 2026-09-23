@@ -25,7 +25,7 @@ function clearControls() { keys.clear(); pointer.firing = false; touch.x = touch
 function setText(id, text) { if ($(id).textContent !== String(text)) $(id).textContent = String(text); }
 function start(sessionMode, id = 'host', room = '') {
   clearControls(); mode = sessionMode; localId = id; code = room; accumulator = 0; lastEvent = 0; frozen = false;
-  view.clear(); $('overlay').hidden = true; $('hud').hidden = false; $('result').hidden = true;
+  view.clear(); $('overlay').hidden = true; $('hud').hidden = false; $('result').hidden = true; $('respawn').hidden = true;
   $('room-panel').hidden = !room; setText('room-code', room); $('reticle').hidden = false;
   if (sessionMode !== 'client') { world = new World(42); world.add('host', readProfile()); world.bots(6); state = world.snapshot(); } else world = null;
   view.setQuality($('quality-select').value); notice(sessionMode === 'solo' ? 'Training sortie. First faction to 25 eliminations wins.' : 'Room online. Keep the host tab open.');
@@ -34,7 +34,7 @@ function start(sessionMode, id = 'host', room = '') {
 }
 function leave() {
   network.stop(); world = state = null; mode = 'menu'; frozen = false; paused = false; view?.clear(); clearControls();
-  $('overlay').hidden = false; $('hud').hidden = true; $('result').hidden = true; $('reticle').hidden = true; $('pause-dialog').close(); status('Choose your fleet. The Rift is waiting.');
+  $('overlay').hidden = false; $('hud').hidden = true; $('result').hidden = true; $('respawn').hidden = true; $('reticle').hidden = true; $('pause-dialog').close(); status('Choose your fleet. The Rift is waiting.');
 }
 function consumeEvents() {
   if (!state) return; const local = state.ships.find(s => s.id === localId);
@@ -112,7 +112,7 @@ async function boot() {
     addEventListener('resize', () => view.resize()); addEventListener('blur', clearControls); document.addEventListener('visibilitychange', clearControls);
     addEventListener('keydown', e => {
       if (e.target.closest('input, select, textarea')) return;
-      const k = e.key.toLowerCase(); if (k === 'escape') { if (paused) resume(); else pause(); return; }
+      const k = e.key.toLowerCase(); if (k === 'escape') { e.preventDefault(); if (!e.repeat) { if (paused) resume(); else pause(); } return; }
       if (mode === 'menu') return;
       if (['w', 'a', 's', 'd', ' ', 'shift', 'e'].includes(k)) e.preventDefault();
       if (k === 'e' && !e.repeat) pulse++; keys.add(k);
