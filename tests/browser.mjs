@@ -44,7 +44,10 @@ try {
     const after = await host.evaluate(() => __gameDebug.state().state.ships.find(s => s.id === 'host').x); assert.ok(after > before + 1);
     await host.keyboard.down(' '); await host.waitForTimeout(350); await host.keyboard.up(' ');
     assert.ok(await host.evaluate(() => __gameDebug.state().state.events.some(e => e.type === 'shot')));
-    await host.keyboard.press('e'); await host.waitForTimeout(150); assert.ok(await host.evaluate(() => __gameDebug.state().state.ships.find(s => s.id === 'host').pulseCooldown > 0));
+    await host.keyboard.press('e');
+    // Assert the real state transition, not an assumed software-GPU frame duration.
+    await host.waitForFunction(() => __gameDebug.state().state.ships.find(s => s.id === 'host').pulseCooldown > 0, null, { timeout: 5000 });
+    assert.ok(await host.evaluate(() => __gameDebug.state().state.events.some(e => e.type === 'pulse' && e.faction === 'fleet')));
     await host.click('#pause-btn'); assert.ok(await host.locator('#pause-dialog').isVisible()); await host.click('#resume-btn'); assert.ok(!await host.locator('#pause-dialog').isVisible());
     await host.screenshot({ path: `${out}/practice-combat.png` }); await host.evaluate(() => __gameDebug.leave()); await mode(host, 'menu');
   });

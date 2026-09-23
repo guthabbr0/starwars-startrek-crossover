@@ -50,6 +50,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Browser multiplayer and performance regression tests
         run: npm run test:browser
+      - name: Combat balance and presentation Playwright checks
+        run: node tests/horizon.mjs
       - name: Package source and verification evidence
         if: always()
         run: |

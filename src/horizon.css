@@ -1,0 +1,9 @@
+/* Broken Horizon: readable combat instrumentation, not a full-screen glass layer. */
+#tactical-overlay{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+#combat-banner{position:absolute;top:108px;left:50%;transform:translateX(-50%);color:#a9d6d9;background:#061423d9;border:1px solid #658e9144;border-radius:3px;padding:9px 15px;font:10px monospace;letter-spacing:.11em;text-align:center;white-space:nowrap}
+#combat-banner.danger{color:#ffd19b;border-color:#c9865766;background:#261811d9}
+#target-readout{position:absolute;bottom:138px;left:50%;transform:translateX(-50%);font:9px monospace;letter-spacing:.07em;color:#b7cbd6;white-space:nowrap}
+.zoom-controls{position:absolute;right:24px;top:185px;display:flex;align-items:center;gap:9px;pointer-events:auto}.zoom-controls span{font:8px monospace;color:#96b2c1;letter-spacing:.09em}.zoom-controls button{border:1px solid #6386a14a;border-radius:3px;width:29px;height:29px;background:#0a1829ce;color:#d7edf7;font-size:18px}
+#reticle.confirmed-hit i{border-color:#ffe7a1;transform:scale(1.6);border-width:2px}.ship-status{border-left:2px solid #69dce399;background:#071524e6}.identity strong{color:#e2edf3}.score{background:#06111fe6;border-top:2px solid #77969b77}.meter{height:6px}.meter-label{color:#a4c3d3}.weapons span{color:#b9cdd7}.radar-panel canvas{opacity:1;background:#061524c4;border-radius:50%;border:1px solid #517f9960}.brief{color:#b1c6ce}.ship-caption strong{font-size:15px}.ship-caption small{color:#87e5fb}
+@media(max-width:700px){#combat-banner{top:80px;max-width:90vw;white-space:normal;font-size:8px;padding:6px 10px}#target-readout{bottom:120px;font-size:7px;max-width:90vw;white-space:normal;text-align:center}.zoom-controls{top:147px;right:14px}.zoom-controls span{display:none}}
+@media(max-height:500px){#combat-banner{top:66px;font-size:7px}#target-readout{display:none}.zoom-controls{top:125px}#event-feed{display:none}}

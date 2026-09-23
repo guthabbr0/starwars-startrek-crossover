@@ -1,6 +1,8 @@
 import { Peer } from 'peerjs';
 import { profile, cleanInput, RULES } from './simulation.js';
 const CODE = /^[A-Z0-9]{6}$/;
+const PROTOCOL = 'broken-horizon-3';
+const UPDATE = 'Update required. Reload both browsers and create a new room.';
 export class Network {
   constructor(onEvent) { this.onEvent = onEvent; this.connections = new Map(); this.peer = null; this.role = ''; this.code = ''; this.id = ''; this.rtt = 0; this.generation = 0; }
   options() {
@@ -34,9 +36,10 @@ export class Network {
       conn.on('data', packet => {
         if (!packet || typeof packet !== 'object' || generation !== this.generation) return;
         if (packet.type === 'hello' && !accepted) {
+          if (packet.protocol !== PROTOCOL) { clearTimeout(timeout); conn.send({ type: 'reject', reason: UPDATE }); setTimeout(() => conn.close(), 100); return; }
           accepted = true; clearTimeout(timeout);
           this.onEvent('join', { id: conn.peer, profile: profile(packet.profile) });
-          conn.send({ type: 'welcome', id: conn.peer, code: this.code });
+          conn.send({ type: 'welcome', protocol: PROTOCOL, id: conn.peer, code: this.code });
         } else if (accepted && packet.type === 'input' && performance.now() - lastInput >= 20) {
           lastInput = performance.now(); this.onEvent('input', { id: conn.peer, input: cleanInput(packet.input) });
         } else if (accepted && packet.type === 'ping') { conn.send({ type: 'pong', at: packet.at }); }
@@ -56,10 +59,10 @@ export class Network {
     return new Promise((resolve, reject) => {
       let ready = false;
       const timer = setTimeout(() => { if (!ready) { this.stop(); reject(new Error('Peer connection timed out. Your network may require a TURN relay.')); } }, 15000);
-      conn.on('open', () => conn.send({ type: 'hello', profile: profile(info) }));
+      conn.on('open', () => conn.send({ type: 'hello', protocol: PROTOCOL, profile: profile(info) }));
       conn.on('data', packet => {
         if (generation !== this.generation || !packet || typeof packet !== 'object') return;
-        if (packet.type === 'welcome') { clearTimeout(timer); ready = true; this.role = 'client'; this.code = code; this.id = packet.id; resolve({ id: this.id, code }); }
+        if (packet.type === 'welcome') { clearTimeout(timer); if (packet.protocol !== PROTOCOL) { this.stop(); reject(new Error(UPDATE)); return; } ready = true; this.role = 'client'; this.code = code; this.id = packet.id; resolve({ id: this.id, code }); }
         else if (packet.type === 'reject') { clearTimeout(timer); this.stop(); reject(new Error(packet.reason)); }
         else if (ready && packet.type === 'snapshot' && Array.isArray(packet.state?.ships) && packet.state.ships.length <= RULES.ships) this.onEvent('snapshot', packet.state);
         else if (packet.type === 'pong' && Number.isFinite(packet.at)) this.rtt = Math.round(performance.now() - packet.at);
