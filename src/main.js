@@ -4,6 +4,7 @@ import { World, RULES, COVER, DOCKS, profile, cleanInput } from './simulation.js
 import { Network } from './network.js';
 import { View } from './view.js';
 import { AudioEngine } from './audio.js';
+import { setResultVisibility } from './result-ui.js';
 const $ = id => document.getElementById(id);
 const sound = new AudioEngine();
 let view, world = null, state = null, mode = 'menu', localId = 'host', code = '', lastEvent = 0, paused = false, frozen = false;
@@ -71,7 +72,8 @@ function updateHud() {
   setText('fps-text', `${Math.round(fps)} FPS`); setText('connection-text', mode === 'solo' ? 'PRACTICE' : mode === 'host' ? `${network.connections.size + 1}/8 PILOTS` : `${network.rtt} ms`);
   setText('pilot-name', `${s.name} / ${s.kills} ELIMINATIONS`);
   $('respawn').hidden = s.respawn <= 0; if (s.respawn > 0) setText('respawn-count', `Reinforcements in ${Math.ceil(s.respawn)} s`);
-  if (state.winner) { $('result').hidden = false; setText('result-title', state.winner === 'draw' ? 'STALEMATE' : state.winner === s.faction ? 'VICTORY' : 'FLEET LOST'); setText('result-subtitle', `${state.score.fleet} : ${state.score.armada} / Your eliminations: ${s.kills}`); $('rematch-btn').hidden = mode === 'client'; }
+  setResultVisibility($('result'), state.winner);
+  if (state.winner) { setText('result-title', state.winner === 'draw' ? 'STALEMATE' : state.winner === s.faction ? 'VICTORY' : 'FLEET LOST'); setText('result-subtitle', `${state.score.fleet} : ${state.score.armada} / Your eliminations: ${s.kills}`); $('rematch-btn').hidden = mode === 'client'; }
   const ctx = $('radar').getContext('2d'); ctx.clearRect(0, 0, 160, 160); ctx.strokeStyle = '#466975'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(80, 80, 72, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(80, 8); ctx.lineTo(80, 152); ctx.moveTo(8, 80); ctx.lineTo(152, 80); ctx.stroke();
   ctx.fillStyle = '#677483';
   for (const c of COVER) { ctx.beginPath(); ctx.arc(80 + c.x / RULES.radius * 70, 80 + c.z / RULES.radius * 70, c.r / RULES.radius * 70, 0, Math.PI * 2); ctx.fill(); }
