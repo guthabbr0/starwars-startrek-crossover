@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { chromium } from '@playwright/test';
+import { chromium } from 'playwright';
 
 // Test only this project's public Vercel URLs. No authentication bypass is used.
 const raw = process.env.BASE_URL || '';
