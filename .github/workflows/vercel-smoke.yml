@@ -5,25 +5,27 @@ on:
   workflow_dispatch:
     inputs:
       url:
-        description: Public Vercel deployment URL for starwars-startrek
+        description: Public Vercel application URL for starwars-startrek
         type: string
         required: true
+        default: https://starwars-startrek.vercel.app
 permissions:
   contents: read
 concurrency:
-  group: live-smoke-${{ github.event.client_payload.url || inputs.url }}
+  group: production-live-smoke-${{ github.event_name == 'workflow_dispatch' && inputs.url || 'starwars-startrek' }}
   cancel-in-progress: true
 defaults:
   run:
     shell: bash
 jobs:
   live-smoke:
+    if: github.event_name == 'workflow_dispatch' || (github.event.client_payload.environment == 'production' && github.event.client_payload.project.id == 'prj_SQuvKAdofBuZWYSnWXIfqnfDrNl1')
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.client_payload.git.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -33,12 +35,18 @@ jobs:
         run: npm ci --no-fund
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-      - name: Check deployed gameplay and public multiplayer
+      # Generated deployment URLs are protected under Standard Protection.
+      # This check intentionally tests the public production alias as a visitor,
+      # without a login cookie, bypass token, or change to deployment protection.
+      - name: Check public production gameplay and multiplayer
         env:
-          BASE_URL: ${{ github.event.client_payload.url || inputs.url }}
+          BASE_URL: ${{ inputs.url || 'https://starwars-startrek.vercel.app' }}
         run: node tests/live.mjs
       - name: Publish test summary
         if: always()
+        env:
+          TRIGGER_DEPLOYMENT_ID: ${{ github.event.client_payload.id }}
+          TRIGGER_COMMIT: ${{ github.event.client_payload.git.sha || github.sha }}
         run: |
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
@@ -46,7 +54,12 @@ jobs:
           if (!fs.existsSync(path)) process.exit(0);
           const r = JSON.parse(fs.readFileSync(path, 'utf8'));
           const rows = r.results.map(x => `- ${x.passed ? 'PASS' : 'FAIL'}: ${x.name}`);
-          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, ['# Live Vercel verification', '', `Deployment: ${r.url}`, '', ...rows, '', r.note, ''].join('\n'));
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
+            '# Public production verification', '', `Tested URL: ${r.url}`,
+            `Trigger deployment: ${process.env.TRIGGER_DEPLOYMENT_ID || 'manual'}`,
+            `Trigger commit: ${process.env.TRIGGER_COMMIT}`, '', ...rows, '', r.note, '',
+            'This is a post-deployment check of the current production alias, not an immutable deployment or promotion gate.', ''
+          ].join('\n'));
           NODE
       - uses: actions/upload-artifact@v4
         if: always()
