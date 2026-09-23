@@ -1,0 +1,13 @@
+import { build } from 'esbuild';
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
+const textures = JSON.parse(await readFile('assets/textures.json', 'utf8'));
+const bundle = await build({ entryPoints: ['src/main.js'], bundle: true, write: false, format: 'iife', target: 'es2022', minify: true, outfile: 'standalone/game.js', plugins: [{ name: 'inline-textures', setup(api) { api.onLoad({ filter: /src[\\/]view\.js$/ }, async ({ path }) => { const source = await readFile(path, 'utf8'); const text = source.replace('loader.loadAsync(`/textures/${name}.webp`)', 'loader.loadAsync(window.__RIFT_TEXTURES[name])'); if (text === source) throw new Error('Texture inlining target not found'); return { contents: text, loader: 'js' }; }); } }] });
+const js = bundle.outputFiles.find(file => file.path.endsWith('.js')).text.replaceAll('</script', '<\\/script');
+const css = bundle.outputFiles.find(file => file.path.endsWith('.css'))?.text || '';
+const data = Object.fromEntries(Object.entries(textures).map(([name, value]) => [name, `data:image/webp;base64,${value}`]));
+let html = await readFile('index.html', 'utf8');
+html = html.replace('</head>', `<style>${css}</style></head>`);
+html = html.replace('<script type="module" src="/src/main.js"></script>', `<script>window.__RIFT_TEXTURES=${JSON.stringify(data)};</script><script>${js}</script>`);
+await mkdir('standalone', { recursive: true });
+await writeFile('standalone/index.html', html);
+console.log(`Self-contained game bundle: ${Buffer.byteLength(html)} bytes`);
