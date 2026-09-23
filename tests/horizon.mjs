@@ -16,10 +16,15 @@ try {
   await check('Broken Horizon release boots with the new sector', async () => { assert.match(await p.locator('.version').textContent(), /03/); assert.equal(await p.evaluate(() => __gameDebug.state().release), '0.3.0-broken-horizon'); await p.screenshot({ path: `${out}/01-command.png` }); });
   await p.selectOption('#quality-select', 'medium'); await p.fill('#player-name', 'Horizon QA'); await p.click('#solo-btn');
   await check('Fresh pilot is not destroyed during the first three seconds', async () => { await p.waitForTimeout(3000); const s = await p.evaluate(() => __gameDebug.state().state.ships.find(s => s.id === 'host')); assert.equal(s.deaths, 0); assert.equal(s.hp, 100); return { hp: s.hp, deaths: s.deaths }; });
+  await check('Default tactical camera shows threats throughout the bot engagement radius', async () => {
+    await p.waitForTimeout(1200); const points = await p.evaluate(() => { const s = __gameDebug.state().state.ships.find(s => s.id === 'host'); return Array.from({ length: 12 }, (_, i) => { const a = i / 12 * Math.PI * 2; return __gameDebug.project(s.x + Math.sin(a) * 76, s.z + Math.cos(a) * 76); }); });
+    for (const point of points) assert.ok(point.visible && point.x > 24 && point.x < 1416 && point.y > 100 && point.y < 760, JSON.stringify(point));
+    return { radiusMetres: 76, sampledDirections: 12 };
+  });
   await check('Practice actually pauses simulation while the tactical menu is open', async () => { await p.keyboard.press('Escape'); const before = await p.evaluate(() => __gameDebug.state().state.time); await p.waitForTimeout(500); const after = await p.evaluate(() => __gameDebug.state().state.time); assert.equal(before, after); await p.click('#resume-btn'); });
   await check('Tactical zoom changes the camera projection and remains bounded', async () => { const before = await p.evaluate(() => __gameDebug.project(-70, 0)); for (let i = 0; i < 3; i++) await p.click('#zoom-out'); await p.waitForTimeout(800); const after = await p.evaluate(() => __gameDebug.project(-70, 0)); assert.ok(Math.abs(before.x - after.x) + Math.abs(before.y - after.y) > 2); for (let i = 0; i < 3; i++) await p.click('#zoom-in'); });
   await check('Real mouse-fired projectiles can kill active AI without god mode', async () => {
-    await p.evaluate(() => __gameDebug.combatScenario()); await p.waitForTimeout(800); await p.mouse.move(720, 450); await p.mouse.down();
+    await p.evaluate(() => __gameDebug.combatScenario()); await p.waitForTimeout(1200); await p.screenshot({ path: `${out}/02-active-combat.png` }); await p.mouse.move(720, 450); await p.mouse.down();
     let kills = 0;
     for (let i = 0; i < 110; i++) {
       const aim = await p.evaluate(() => { const d = __gameDebug.state(), me = d.state.ships.find(s => s.id === d.localId); const enemies = d.state.ships.filter(s => s.faction !== me.faction && s.respawn <= 0).sort((a,b) => Math.hypot(a.x-me.x,a.z-me.z)-Math.hypot(b.x-me.x,b.z-me.z)); const t = enemies[0]; return { kills: me.kills, hp: me.hp, point: t ? __gameDebug.project(t.x + t.vx * 0.3, t.z + t.vz * 0.3) : null }; });

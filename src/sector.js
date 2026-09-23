@@ -25,7 +25,9 @@ export class Sector {
     add(new T.TorusGeometry(RULES.radius, 0.1, 4, 180), this.ice, 0, -4, 0, Math.PI / 2);
     // Real cover corresponds exactly to collision and line-of-sight geometry.
     for (const c of COVER) {
-      const asteroid = add(new T.IcosahedronGeometry(c.r, 2), this.rock, c.x, -3, c.z); asteroid.scale.y = 0.78;
+      const geometry = new T.IcosahedronGeometry(c.r, 2), vertices = geometry.attributes.position;
+      for (let i = 0; i < vertices.count; i++) { const x = vertices.getX(i), y = vertices.getY(i), z = vertices.getZ(i), k = 0.88 + 0.11 * Math.sin(x * 1.3 + z * 0.7) * Math.cos(y * 1.9); vertices.setXYZ(i, x * k, y * k, z * k); }
+      geometry.computeVertexNormals(); const asteroid = add(geometry, this.rock, c.x, -3, c.z); asteroid.scale.y = 0.78;
       add(new T.TorusGeometry(c.r + 1, 0.05, 4, 64), this.amber, c.x, -2, c.z, Math.PI / 2);
     }
     this.core = add(new T.SphereGeometry(RULES.core, 40, 24), new T.MeshStandardMaterial({ map: t.lava, color: 0xbfa78b, roughness: 0.8, emissive: 0xff450a, emissiveMap: t.lava, emissiveIntensity: 0.24 }), 0, -7, 0);
@@ -33,8 +35,13 @@ export class Sector {
     add(new T.SphereGeometry(12.6, 32, 20), haloMat, 0, -7, 0);
     this.orbit = add(new T.TorusGeometry(19, 0.08, 4, 96), this.amber, 0, -5, 0, 1.3); this.orbit.rotation.z = 0.25;
     // A distant ringed world lends the arena scale without participating in combat.
-    const planet = add(new T.SphereGeometry(105, 48, 32), new T.MeshStandardMaterial({ map: t.lava, color: 0x92a9c6, roughness: 1 }), 210, -150, -400);
-    const rings = add(new T.RingGeometry(128, 185, 120), new T.MeshBasicMaterial({ color: 0x8196b9, transparent: true, opacity: 0.28, side: T.DoubleSide }), planet.position.x, planet.position.y, planet.position.z, 1.05); rings.rotation.z = 0.3;
+    const gas = new T.ShaderMaterial({ vertexShader: 'varying vec3 p;varying vec3 n;varying vec3 v;void main(){p=normalize(position);vec4 w=modelMatrix*vec4(position,1.);n=normalize(mat3(modelMatrix)*normal);v=cameraPosition-w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}', fragmentShader: `varying vec3 p;varying vec3 n;varying vec3 v;void main(){float curl=sin(p.x*8.+p.z*4.)*.7+sin(p.z*15.+p.y*9.)*.2;float bands=.5+.5*sin(p.y*57.+curl*3.);vec3 tint=mix(vec3(.15,.25,.36),vec3(.52,.67,.71),bands);tint=mix(tint,vec3(.71,.65,.49),smoothstep(.79,.94,sin(p.y*23.+curl)*.5+.5)*.55);float light=pow(max(0.,dot(normalize(n),normalize(vec3(-.6,.8,.4)))),.65);float rim=pow(1.-abs(dot(normalize(n),normalize(v))),3.);gl_FragColor=vec4(tint*(.07+light*1.8)+vec3(.15,.4,.66)*rim*.28,1.);
+#include <tonemapping_fragment>
+#include <colorspace_fragment>
+}` });
+    const planet = add(new T.SphereGeometry(95, 48, 32), gas, 250, -180, -460);
+    const ringMaterial = new T.ShaderMaterial({ transparent: true, depthWrite: false, side: T.DoubleSide, vertexShader: 'varying vec2 p;void main(){p=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}', fragmentShader: 'varying vec2 p;void main(){float r=length(p);float edge=smoothstep(120.,124.,r)*(1.-smoothstep(177.,181.,r));float bands=.35+.65*pow(.5+.5*sin(r*2.8),2.);float gap=1.-smoothstep(149.,151.,r)*(1.-smoothstep(154.,156.,r));gl_FragColor=vec4(vec3(.61,.68,.72),edge*bands*gap*.42);}' });
+    const rings = add(new T.RingGeometry(120, 181, 144), ringMaterial, planet.position.x, planet.position.y, planet.position.z, 1.08); rings.rotation.z = 0.22;
     // Gate, trusses and aperture are deliberately open: the landmark is not a wall.
     this.gate = new T.Group(); this.gate.position.set(0, 12, -172); scene.add(this.gate);
     for (const [radius, width, material] of [[28, 1.8, this.metal], [25.7, 0.22, this.ice], [31, 0.45, this.dark]]) this.gate.add(new T.Mesh(new T.TorusGeometry(radius, width, 6, 80), material));
@@ -100,6 +107,15 @@ export class Sector {
         c.fillStyle = 'rgba(3,12,24,.8)'; c.fillRect(p.x - 23, p.y - 13, 46, 5);
         c.fillStyle = enemy ? '#ff9461' : '#68cde3'; c.fillRect(p.x - 22, p.y - 12, 44 * clamp(s.hp / (s.maxHp || 100), 0, 1), 3);
         if (enemy && s.target === localId && s.lock > 0) { c.fillStyle = '#ffdb8d'; c.fillText(s.burstRest > 0 ? 'RELOADING' : s.lock >= BALANCE.acquisition ? 'FIRING' : 'ACQUIRING', p.x, p.y - 45); }
+      }
+    }
+    // A lead cue helps a human aim; it never bends projectiles or applies damage.
+    if (closest && distance < 150) {
+      const flight = Math.min(1.6, distance / 125), from = this.project(closest.x, 4, closest.z);
+      const lead = this.project(closest.x + closest.vx * flight, 0.5, closest.z + closest.vz * flight);
+      if (lead.visible && lead.x > 28 && lead.x < width - 28 && lead.y > 100 && lead.y < height - 140) {
+        c.strokeStyle = 'rgba(248,227,174,.7)'; c.lineWidth = 1; c.setLineDash([2, 4]); c.beginPath(); c.moveTo(from.x, from.y); c.lineTo(lead.x, lead.y); c.stroke(); c.setLineDash([]);
+        c.beginPath(); c.arc(lead.x, lead.y, 5, 0, Math.PI * 2); c.stroke(); c.fillStyle = '#f4dda8'; c.font = '8px monospace'; c.fillText('LEAD', lead.x, lead.y + 17);
       }
     }
     for (const f of this.flashes) { const p = this.project(f.x, 6 + (0.65 - f.life) * 8, f.z); c.fillStyle = `rgba(240,224,159,${Math.min(1, f.life * 3)})`; c.font = 'bold 17px monospace'; c.fillText(`-${f.damage}`, p.x, p.y); }

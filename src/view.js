@@ -96,13 +96,14 @@ export class View {
   resize() { const cap = this.quality === 'low' ? 1 : this.quality === 'high' ? 1.75 : 1.25; this.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, cap) * this.scale); this.renderer.setSize(innerWidth, innerHeight, false); this.camera.aspect = innerWidth / innerHeight; this.camera.updateProjectionMatrix(); }
   frame(state, localId, dt, elapsed, frameMs) {
     this.hero.visible = this.enemyHero.visible = !state;
+    const wantedFov = state ? 72 : 56; if (this.camera.fov !== wantedFov) { this.camera.fov = wantedFov; this.camera.updateProjectionMatrix(); }
     if (!state) { this.hero.position.y = 3 + Math.sin(elapsed * 0.5) * 0.6; this.camera.position.lerp(this.v.set(0, 44, 66), 0.03); this.camera.lookAt(0, 0, 0); }
     else {
       const seen = new Set();
       for (const data of state.ships) { seen.add(data.id); const item = this.ships.get(data.id) || this.addShip(data); item.group.visible = data.respawn <= 0; item.group.position.lerp(this.v.set(data.x, Math.sin(elapsed * 2 + data.x) * 0.15, data.z), Math.min(1, dt * 18)); const delta = Math.atan2(Math.sin(data.angle - item.group.rotation.y), Math.cos(data.angle - item.group.rotation.y)); item.group.rotation.y += delta * Math.min(1, dt * 20); item.plume.scale.z = 0.4 + Math.hypot(data.vx, data.vz) / 30; item.shield.visible = data.hit > 0 || data.invulnerable > 0; item.shield.material.opacity = data.hit > 0 ? 0.45 : 0.12; }
       for (const [id, item] of this.ships) if (!seen.has(id)) { this.scene.remove(item.group); item.shield.material.dispose(); this.ships.delete(id); }
       const local = state.ships.find(s => s.id === localId);
-      if (local) { const item = this.ships.get(localId); this.camera.position.lerp(this.v.set(item.group.position.x + local.vx * 0.25, 79 * this.sector.zoom, item.group.position.z + 58 * this.sector.zoom + local.vz * 0.25), 1 - Math.exp(-3 * dt)); this.camera.lookAt(item.group.position.x, 0, item.group.position.z); }
+      if (local) { const item = this.ships.get(localId), framing = this.sector.zoom * Math.max(1, 0.8 / this.camera.aspect); this.camera.position.lerp(this.v.set(item.group.position.x + local.vx * 0.25, 145 * framing, item.group.position.z + 60 * framing + local.vz * 0.25), 1 - Math.exp(-3 * dt)); this.camera.lookAt(item.group.position.x, 0, item.group.position.z + 20 * framing); }
       this.bullets.count = Math.min(RULES.bullets, state.bullets.length);
       this.dummy.scale.set(1, 1, 1);
       for (let i = 0; i < this.bullets.count; i++) { const b = state.bullets[i]; this.dummy.position.set(b.x, 0.5, b.z); this.dummy.rotation.set(0, Math.atan2(b.vx, b.vz), 0); this.dummy.updateMatrix(); this.bullets.setMatrixAt(i, this.dummy.matrix); this.bullets.setColorAt(i, this.colorCache[b.faction]); }
