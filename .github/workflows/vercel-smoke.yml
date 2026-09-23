@@ -21,7 +21,7 @@ jobs:
   live-smoke:
     if: github.event_name == 'workflow_dispatch' || (github.event.client_payload.environment == 'production' && github.event.client_payload.project.id == 'prj_SQuvKAdofBuZWYSnWXIfqnfDrNl1')
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,13 +35,15 @@ jobs:
         run: npm ci --no-fund
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-      # Generated deployment URLs are protected under Standard Protection.
-      # This check intentionally tests the public production alias as a visitor,
-      # without a login cookie, bypass token, or change to deployment protection.
+      # Test the public production alias without login or protection bypass.
       - name: Check public production gameplay and multiplayer
         env:
           BASE_URL: ${{ inputs.url || 'https://starwars-startrek.vercel.app' }}
         run: node tests/live.mjs
+      - name: Expanded Playwright review and development screenshots
+        env:
+          BASE_URL: https://starwars-startrek.vercel.app
+        run: node tests/review.mjs
       - name: Publish test summary
         if: always()
         env:
@@ -67,4 +69,11 @@ jobs:
           name: vercel-live-test-evidence
           path: reports/live/
           retention-days: 7
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-development-review
+          path: reports/review/
+          retention-days: 14
           if-no-files-found: warn
