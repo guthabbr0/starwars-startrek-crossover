@@ -1,0 +1,57 @@
+name: Vercel live smoke
+on:
+  repository_dispatch:
+    types: [vercel.deployment.success]
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Public Vercel deployment URL for starwars-startrek
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: live-smoke-${{ github.event.client_payload.url || inputs.url }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
+jobs:
+  live-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked test dependencies
+        run: npm ci --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Check deployed gameplay and public multiplayer
+        env:
+          BASE_URL: ${{ github.event.client_payload.url || inputs.url }}
+        run: node tests/live.mjs
+      - name: Publish test summary
+        if: always()
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'reports/live/results.json';
+          if (!fs.existsSync(path)) process.exit(0);
+          const r = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const rows = r.results.map(x => `- ${x.passed ? 'PASS' : 'FAIL'}: ${x.name}`);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, ['# Live Vercel verification', '', `Deployment: ${r.url}`, '', ...rows, '', r.note, ''].join('\n'));
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vercel-live-test-evidence
+          path: reports/live/
+          retention-days: 7
+          if-no-files-found: warn
