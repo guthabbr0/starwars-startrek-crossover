@@ -28,13 +28,12 @@ async function context(name, options = {}, expectedAssetFailure = false) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, ...options });
   await ctx.tracing.start({ screenshots: true, snapshots: true, sources: true });
   contexts.push({ name, ctx });
-  // Observe actual AudioContext state and the master gain without changing routing.
+  // Observe actual contexts without changing the audio graph or mute implementation.
   await ctx.addInitScript(() => {
     const Native = window.AudioContext;
     window.__qaAudio = [];
     if (Native) window.AudioContext = class extends Native {
-      constructor(...args) { super(...args); this.__qaGains = []; window.__qaAudio.push(this); }
-      createGain() { const node = super.createGain(); this.__qaGains.push(node); return node; }
+      constructor(...args) { super(...args); window.__qaAudio.push(this); }
     };
   });
   const page = await ctx.newPage();
@@ -101,12 +100,14 @@ try {
       await p.keyboard.press('e'); await p.waitForFunction(() => __gameDebug.state().state.ships.find(s => s.id === 'host').pulseCooldown > 0);
       await shot(p, '03-solo-combat', 'Live solo sortie after movement, boost, fire and a deflector pulse.');
     });
-    await check('WebAudio activates and mute/unmute changes master gain', p, async () => {
+    await check('WebAudio activates and mute/unmute suspends/resumes the real context', p, async () => {
       await p.waitForFunction(() => __qaAudio.some(c => c.state === 'running'));
+      assert.equal(await p.evaluate(() => __qaAudio.length), 1);
       await p.click('#sound-btn'); assert.equal(await p.locator('#sound-btn').getAttribute('aria-pressed'), 'false');
-      await p.waitForFunction(() => __qaAudio[0].__qaGains[0].gain.value < 0.001);
+      await p.waitForFunction(() => __qaAudio[0].state === 'suspended');
       await p.click('#sound-btn'); assert.equal(await p.locator('#sound-btn').getAttribute('aria-pressed'), 'true');
-      await p.waitForFunction(() => __qaAudio[0].__qaGains[0].gain.value > 0.05);
+      await p.waitForFunction(() => __qaAudio[0].state === 'running');
+      assert.equal((await p.evaluate(() => __gameDebug.stats())).audioVoices, 10);
     });
     await check('Tactical menu opens, resumes and closes with Escape', p, async () => {
       await p.click('#pause-btn'); assert.ok(await p.locator('#pause-dialog').isVisible());
@@ -124,7 +125,9 @@ try {
       await p.selectOption('#quality-select', 'low');
     });
     await check('Pilot name and render quality persist across reload', p, async () => {
-      await practice(p); await leave(p); await load(p);
+      await practice(p); await leave(p);
+      await p.reload({ waitUntil: 'domcontentloaded' });
+      await p.waitForFunction(() => window.__gameDebug?.ready);
       assert.equal(await p.locator('#player-name').inputValue(), 'QA Commander');
       assert.equal(await p.locator('#quality-select').inputValue(), 'low');
     });
@@ -266,7 +269,7 @@ try {
 } finally {
   for (const item of [...contexts]) await close(item).catch(() => {});
   const report = { url: base, startedAt, completedAt: new Date().toISOString(), commit: process.env.GITHUB_SHA || null, runId: process.env.GITHUB_RUN_ID || null, browser: browser?.version(), results, screenshots, errors, warnings,
-    limitations: ['Chromium with SwiftShader on a GitHub Actions runner; not a hardware frame-rate measurement.', 'Mobile is browser emulation with actual touch events, not physical iOS or Android hardware.', 'Multiplayer uses public PeerJS signalling and real WebRTC between two independent browser contexts on one runner; arbitrary external NAT/firewall traversal is not established.', 'Damage, respawn and match-end replication use named deterministic QA fixtures; normal weapons are exercised separately.', 'Audio checks verify running context and master gain, not subjective soundtrack quality.', 'Firefox, Safari/WebKit, eight simultaneous human clients and long-duration soak are not covered by this review.'] };
+    limitations: ['Chromium with SwiftShader on a GitHub Actions runner; not a hardware frame-rate measurement.', 'Mobile is browser emulation with actual touch events, not physical iOS or Android hardware.', 'Multiplayer uses public PeerJS signalling and real WebRTC between two independent browser contexts on one runner; arbitrary external NAT/firewall traversal is not established.', 'Damage, respawn and match-end replication use named deterministic QA fixtures; normal weapons are exercised separately.', 'Audio checks verify a running context, mute suspension and resume, and the voice-pool cap; not subjective soundtrack quality.', 'Firefox, Safari/WebKit, eight simultaneous human clients and long-duration soak are not covered by this review.'] };
   await writeFile(`${out}/results.json`, JSON.stringify(report, null, 2));
   const rows = results.map(r => `| ${r.passed ? 'PASS' : 'FAIL'} | ${r.name.replaceAll('|', '/')} | ${r.message?.replaceAll('|', '/').replaceAll('\n', ' ') || ''} |`);
   const text = ['# STELLAR RIFT: Playwright production review', '', `URL: ${base}`, `Completed: ${report.completedAt}`, `Source commit: ${report.commit}`, `Chromium: ${report.browser}`, '', `Passed: ${results.filter(r => r.passed).length}/${results.length}`, '', '| Result | Check | Details |', '|---|---|---|', ...rows, '', '## Screenshots', '', ...screenshots.map(s => `- [${s.caption}](${s.file})`), '', '## Scope and limitations', '', ...report.limitations.map(s => `- ${s}`), '', 'Traces record browser operations and network activity. Assertions and outcomes are in results.json. Open a trace with `npx playwright show-trace trace-desktop.zip`.', ''].join('\n');
