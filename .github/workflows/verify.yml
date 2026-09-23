@@ -9,31 +9,40 @@ on:
       - assets/**
       - index.html
       - package.json
+      - package-lock.json
       - vite.config.js
       - vercel.json
       - .github/workflows/verify.yml
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 concurrency:
-  group: game-verification
+  group: game-verification-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
 jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install dependencies
-        run: npm install --no-fund
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-fund
       - name: Simulation regression tests
         run: |
           mkdir -p reports
           npm test 2>&1 | tee reports/unit-tests.txt
-      - name: Build production and self-contained import bundle
+      - name: Build production and self-contained bundle
         run: |
           npm run build 2>&1 | tee reports/build.txt
           npm run bundle:standalone
@@ -41,36 +50,22 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Browser multiplayer and performance regression tests
         run: npm run test:browser
-      - name: Publish verified source bundle for Vercel import
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add standalone/index.html package-lock.json
-          git diff --cached --quiet || git commit -m 'Publish verified standalone game and lock dependencies [skip ci]'
-          git push origin HEAD:main
-      - name: Deploy through existing repository credential when available
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          if [ -z "$VERCEL_TOKEN" ]; then
-            printf '%s\n' '{"status":"blocked","reason":"No VERCEL_TOKEN repository credential is configured. The connected import route must be used instead."}' > reports/deployment-status.json
-            exit 0
-          fi
-          npx --yes vercel deploy --prod --yes --token "$VERCEL_TOKEN" > reports/deployment-url.txt
-          node --input-type=module -e "import fs from 'node:fs'; const text=fs.readFileSync('reports/deployment-url.txt','utf8'); const url=text.match(/https:\/\/[^\s]+\.vercel\.app/)?.[0]; if(!url) throw Error('No verified deployment URL returned'); const r=await fetch(url); if(!r.ok) throw Error('Deployment HTTP '+r.status); fs.writeFileSync('reports/deployment-status.json',JSON.stringify({status:'deployed',url,httpStatus:r.status},null,2));"
-      - name: Package current source and verification evidence
+      - name: Package source and verification evidence
         if: always()
         run: |
           mkdir -p reports
           git rev-parse HEAD > reports/commit.txt
-          tar --exclude='./node_modules' --exclude='./.git' --exclude='./source.tar.gz' -czf source.tar.gz .
+          printf '%s\n' '{"delivery":"Vercel native Git integration","note":"Deployment status is reported independently by Vercel. This CI job does not use or require VERCEL_TOKEN."}' > reports/delivery.json
+          git ls-files -z | tar --null -T - -czf "$RUNNER_TEMP/stellar-rift-source.tar.gz"
+          cp "$RUNNER_TEMP/stellar-rift-source.tar.gz" source.tar.gz
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: verified-game-and-reports
+          name: game-build-and-test-evidence
           path: |
             source.tar.gz
             reports/
             dist/
             standalone/
           retention-days: 7
+          if-no-files-found: error
