@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.vercel/
+.env
+.env.*
+!.env.example
+reports/
+public/textures/*.webp
+*.log
+source.tar.gz
