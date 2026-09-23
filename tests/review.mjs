@@ -103,10 +103,12 @@ try {
     await check('WebAudio activates and mute/unmute suspends/resumes the real context', p, async () => {
       await p.waitForFunction(() => __qaAudio.some(c => c.state === 'running'));
       assert.equal(await p.evaluate(() => __qaAudio.length), 1);
-      await p.click('#sound-btn'); assert.equal(await p.locator('#sound-btn').getAttribute('aria-pressed'), 'false');
-      await p.waitForFunction(() => __qaAudio[0].state === 'suspended');
-      await p.click('#sound-btn'); assert.equal(await p.locator('#sound-btn').getAttribute('aria-pressed'), 'true');
-      await p.waitForFunction(() => __qaAudio[0].state === 'running');
+      await p.click('#sound-btn');
+      await p.waitForFunction(() => __qaAudio[0].state === 'suspended' && document.getElementById('sound-btn').getAttribute('aria-pressed') === 'false');
+      assert.equal(await p.locator('#sound-btn').getAttribute('aria-pressed'), 'false');
+      await p.click('#sound-btn');
+      await p.waitForFunction(() => __qaAudio[0].state === 'running' && document.getElementById('sound-btn').getAttribute('aria-pressed') === 'true');
+      assert.equal(await p.locator('#sound-btn').getAttribute('aria-pressed'), 'true');
       assert.equal((await p.evaluate(() => __gameDebug.stats())).audioVoices, 10);
     });
     await check('Tactical menu opens, resumes and closes with Escape', p, async () => {
