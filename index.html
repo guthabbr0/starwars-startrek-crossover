@@ -10,27 +10,30 @@
 </head>
 <body>
   <canvas id="game-canvas" aria-label="Three-dimensional space battlefield"></canvas>
+  <canvas id="tactical-overlay" aria-hidden="true"></canvas>
   <main id="overlay">
-    <header class="masthead"><a href="./" class="brand"><span class="brand-icon">✦</span> RIFT COMMAND<span class="version">/ 02</span></a><span class="sector"><i></i> SECTOR 07 / NEUTRAL SPACE</span></header>
+    <header class="masthead"><a href="./" class="brand"><span class="brand-icon">✦</span> RIFT COMMAND<span class="version">/ 03</span></a><span class="sector"><i></i> OPERATION / BROKEN HORIZON</span></header>
     <section class="launch">
       <div class="eyebrow"><span></span> TWO UNIVERSES. ONE BATTLEFIELD.</div>
       <h1>STELLAR<br /><span>RIFT</span><em>CROSSOVER WAR</em></h1>
-      <p class="brief">The final frontier has a new enemy.<br />Choose your fleet. Assemble your wing.<br />Decide which universe survives.</p>
+      <p class="brief">A fractured frontier. Two fleets. No retreat.<br />Read the enemy. Break their lock.<br />Bring your wing home.</p>
       <div class="tags"><span>REAL-TIME MULTIPLAYER</span><span>3D SPACE COMBAT</span></div>
       <div class="launch-controls">
         <div class="setup-grid"><label>01 / CALLSIGN<input id="player-name" autocomplete="nickname" maxlength="16" placeholder="Enter your callsign" /></label><label>02 / ALLEGIANCE<select id="faction-select"><option value="fleet">Starfleet / Federation</option><option value="armada">Galactic Empire</option></select></label></div>
         <button class="primary" id="host-btn" disabled>CREATE WAR ROOM <span>↗</span></button>
         <div class="join-row"><label class="sr-only" for="room-input">Room code</label><input id="room-input" maxlength="6" placeholder="ROOM CODE" autocapitalize="characters" spellcheck="false" /><button id="join-btn" disabled>JOIN ROOM →</button></div>
-        <button class="practice" id="solo-btn" disabled><span>◇</span> SOLO PRACTICE <small>Train with AI wingmates</small></button>
+        <button class="practice" id="solo-btn" disabled><span>◇</span> SOLO PRACTICE <small>Burst-fire AI / No instant locks</small></button>
         <p id="status-text" role="status" aria-live="polite">Loading flight systems and generated textures...</p>
         <p id="fallback" hidden>Your browser must support WebGL 2. No account or purchase is required.</p>
       </div>
     </section>
-    <aside class="ship-caption"><span class="caption-line"></span><div><small>FEDERATION CRUISER</small><strong>EXPLORATION ENDS HERE.</strong><p>Phaser arrays / Warp boost / Deflector pulse</p></div></aside>
+    <aside class="ship-caption"><span class="caption-line"></span><div><small>FEDERATION CRUISER</small><strong>EXPLORATION ENDS HERE.</strong><p>480 m battle sector / Cover / Repair docks</p></div></aside>
     <footer class="launch-footer"><span>UNOFFICIAL FAN PROJECT / NOT AFFILIATED WITH THE FRANCHISE OWNERS</span><label>RENDER QUALITY <select id="quality-select"><option value="auto">AUTO</option><option value="low">LOW</option><option value="medium">MEDIUM</option><option value="high">HIGH</option></select></label></footer>
   </main>
   <section id="hud" hidden aria-label="Combat controls and status">
-    <div class="hud-top"><div class="identity"><span class="eyebrow">TACTICAL UPLINK</span><strong id="pilot-name">PILOT</strong><small id="connection-text">CONNECTING</small></div><div class="score"><div class="blue"><small>FEDERATION</small><b id="fleet-score">0</b></div><div class="clock"><b id="match-time">3:00</b><small>FIRST TO 25</small></div><div class="orange"><small>EMPIRE</small><b id="armada-score">0</b></div></div><button id="pause-btn" class="hud-button">ESC / MENU</button></div>
+    <div class="hud-top"><div class="identity"><span class="eyebrow">TACTICAL UPLINK</span><strong id="pilot-name">PILOT</strong><small id="connection-text">CONNECTING</small></div><div class="score"><div class="blue"><small>FEDERATION</small><b id="fleet-score">0</b></div><div class="clock"><b id="match-time">5:00</b><small>FIRST TO 25</small></div><div class="orange"><small>EMPIRE</small><b id="armada-score">0</b></div></div><button id="pause-btn" class="hud-button">ESC / MENU</button></div>
+    <div id="combat-banner">OPEN SECTOR</div><div id="target-readout"></div>
+    <div class="zoom-controls"><button id="zoom-in" aria-label="Zoom in">+</button><span>TACTICAL ZOOM</span><button id="zoom-out" aria-label="Zoom out">−</button></div>
     <div id="event-feed" aria-live="polite">Flight systems online.</div>
     <div id="room-panel" hidden><small>PRIVATE ROOM</small><strong id="room-code"></strong><button id="copy-room">COPY INVITE ↗</button></div>
     <div class="hud-bottom"><div class="ship-status"><div class="meter-label"><span>HULL INTEGRITY</span><b id="health-text">100</b></div><div class="meter"><i id="health-bar"></i></div><div class="meter-label"><span>WARP CAPACITOR</span><b id="energy-text">100</b></div><div class="meter energy"><i id="energy-bar"></i></div></div><div class="weapons"><div><kbd>SPACE / CLICK</kbd><span>PHASER ARRAY</span></div><div><kbd>E</kbd><span>DEFLECTOR PULSE <b id="pulse-state">READY</b></span></div><div><kbd>SHIFT</kbd><span>WARP BOOST</span></div></div><div class="radar-panel"><canvas id="radar" width="160" height="160" aria-label="Radar of friendly and enemy ships"></canvas><span id="fps-text">60 FPS</span></div></div>
@@ -40,7 +43,7 @@
   <div id="respawn" hidden><span>SHIP LOST</span><strong id="respawn-count"></strong></div>
   <section id="result" hidden><div><small>SORTIE COMPLETE</small><h2 id="result-title">VICTORY</h2><p id="result-subtitle"></p><button id="rematch-btn" class="primary">LAUNCH REMATCH</button><button id="result-exit">RETURN TO COMMAND</button></div></section>
   <button id="sound-btn" aria-pressed="true">SOUND ON</button>
-  <dialog id="pause-dialog"><small>TACTICAL MENU</small><h2>HOLD YOUR COURSE.</h2><p>The multiplayer battle continues while this menu is open.</p><div class="help"><span><kbd>W A S D</kbd> Manoeuvre</span><span><kbd>MOUSE</kbd> Aim</span><span><kbd>SPACE / CLICK</kbd> Fire</span><span><kbd>SHIFT</kbd> Boost</span><span><kbd>E</kbd> Pulse</span></div><button id="resume-btn" class="primary">RETURN TO BATTLE</button><button id="leave-btn">LEAVE ROOM</button></dialog>
+  <dialog id="pause-dialog"><small>TACTICAL MENU</small><h2>HOLD YOUR COURSE.</h2><p>Solo practice pauses here. Multiplayer continues. Break enemy locks behind asteroids. Green radar squares mark your repair dock.</p><div class="help"><span><kbd>W A S D</kbd> Manoeuvre</span><span><kbd>MOUSE</kbd> Aim</span><span><kbd>SPACE / CLICK</kbd> Fire</span><span><kbd>SHIFT</kbd> Boost</span><span><kbd>E</kbd> Pulse</span><span><kbd>SCROLL</kbd> Tactical zoom</span></div><button id="resume-btn" class="primary">RETURN TO BATTLE</button><button id="leave-btn">LEAVE ROOM</button></dialog>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

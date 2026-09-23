@@ -1,5 +1,6 @@
 import './style.css';
-import { World, RULES, profile, cleanInput } from './simulation.js';
+import './horizon.css';
+import { World, RULES, COVER, DOCKS, profile, cleanInput } from './simulation.js';
 import { Network } from './network.js';
 import { View } from './view.js';
 import { AudioEngine } from './audio.js';
@@ -39,7 +40,7 @@ function leave() {
 function consumeEvents() {
   if (!state) return; const local = state.ships.find(s => s.id === localId);
   for (const event of state.events) if (event.id > lastEvent) {
-    lastEvent = event.id; view.effect(event); if (event.message) notice(event.message);
+    lastEvent = event.id; view.effect(event); view.sector.event(event, localId); if (event.message) notice(event.message);
     if (local && Math.hypot(event.x - local.x, event.z - local.z) < 55) sound.effect(event.type, (event.x - local.x) / 45);
   }
 }
@@ -72,7 +73,10 @@ function updateHud() {
   $('respawn').hidden = s.respawn <= 0; if (s.respawn > 0) setText('respawn-count', `Reinforcements in ${Math.ceil(s.respawn)} s`);
   if (state.winner) { $('result').hidden = false; setText('result-title', state.winner === 'draw' ? 'STALEMATE' : state.winner === s.faction ? 'VICTORY' : 'FLEET LOST'); setText('result-subtitle', `${state.score.fleet} : ${state.score.armada} / Your eliminations: ${s.kills}`); $('rematch-btn').hidden = mode === 'client'; }
   const ctx = $('radar').getContext('2d'); ctx.clearRect(0, 0, 160, 160); ctx.strokeStyle = '#466975'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(80, 80, 72, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(80, 8); ctx.lineTo(80, 152); ctx.moveTo(8, 80); ctx.lineTo(152, 80); ctx.stroke();
-  for (const t of state.ships) if (t.respawn <= 0) { ctx.fillStyle = t.id === localId ? '#ffffff' : t.faction === 'fleet' ? '#66dfff' : '#ff7447'; ctx.beginPath(); ctx.arc(80 + t.x / 85 * 70, 80 + t.z / 85 * 70, t.id === localId ? 3.5 : 2, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = '#677483';
+  for (const c of COVER) { ctx.beginPath(); ctx.arc(80 + c.x / RULES.radius * 70, 80 + c.z / RULES.radius * 70, c.r / RULES.radius * 70, 0, Math.PI * 2); ctx.fill(); }
+  for (const d of DOCKS) { ctx.strokeStyle = d.faction === s.faction ? '#84e1b1' : '#ac796f'; ctx.strokeRect(77 + d.x / RULES.radius * 70, 77 + d.z / RULES.radius * 70, 6, 6); }
+  for (const t of state.ships) if (t.respawn <= 0) { ctx.fillStyle = t.id === localId ? '#ffffff' : t.faction === 'fleet' ? '#66dfff' : '#ff7447'; ctx.beginPath(); ctx.arc(80 + t.x / RULES.radius * 70, 80 + t.z / RULES.radius * 70, t.id === localId ? 3.5 : 2, 0, Math.PI * 2); ctx.fill(); }
 }
 function frame(now) {
   requestAnimationFrame(frame);
@@ -81,7 +85,7 @@ function frame(now) {
   if (raw > 0 && raw < 250) fps += (1000 / raw - fps) * 0.06;
   if (mode !== 'menu') {
     const controls = input();
-    if (world && !frozen) { world.setInput('host', controls); accumulator += dt; let ticks = 0; while (accumulator >= RULES.step && ticks < 6) { world.tick(); accumulator -= RULES.step; ticks++; } state = { time: world.time, score: world.score, winner: world.winner, ships: [...world.ships.values()], bullets: world.bullets, events: world.events }; consumeEvents(); }
+    if (world && !frozen && !(paused && mode === 'solo')) { world.setInput('host', controls); accumulator += dt; let ticks = 0; while (accumulator >= RULES.step && ticks < 6) { world.tick(); accumulator -= RULES.step; ticks++; } state = { time: world.time, score: world.score, winner: world.winner, ships: [...world.ships.values()], bullets: world.bullets, events: world.events }; consumeEvents(); }
     netClock += dt; pingClock += dt;
     if (netClock >= 0.05) { netClock = 0; if (mode === 'client') network.send({ type: 'input', input: controls }); else if (mode === 'host') network.broadcast({ type: 'snapshot', state: world.snapshot() }); }
     if (pingClock >= 2) { pingClock = 0; network.send({ type: 'ping', at: performance.now() }); }
@@ -126,10 +130,13 @@ async function boot() {
       pad.onpointermove = e => { if (!startPoint) return; const x = (e.clientX - startPoint.x) / 35, z = (e.clientY - startPoint.y) / 35, n = Math.max(1, Math.hypot(x, z)); if (id === 'move-stick') { touch.x = x / n; touch.z = z / n; } else { touch.ax = x / n; touch.az = z / n; } };
       const release = () => { startPoint = null; if (id === 'move-stick') touch.x = touch.z = 0; else touch.firing = false; }; pad.onpointerup = pad.onpointercancel = release;
     }
+    $('game-canvas').addEventListener('wheel', e => { if (mode !== 'menu') { e.preventDefault(); view.sector.zoom = Math.max(0.72, Math.min(1.5, view.sector.zoom + Math.sign(e.deltaY) * 0.08)); } }, { passive: false });
+    $('zoom-in').onclick = () => view.sector.zoom = Math.max(0.72, view.sector.zoom - 0.12);
+    $('zoom-out').onclick = () => view.sector.zoom = Math.min(1.5, view.sector.zoom + 0.12);
     $('touch-pulse').onclick = () => pulse++;
     $('game-canvas').addEventListener('webglcontextlost', e => { e.preventDefault(); leave(); status('Graphics context lost. Reload to restore the renderer.', true); });
     window.__gameDebug = {
-      ready: true, state: () => ({ mode, localId, code, state: world ? world.snapshot() : state, connectionCount: network.connections.size, stats: view.stats() }),
+      ready: true, state: () => ({ release: '0.3.0-broken-horizon', mode, localId, code, state: world ? world.snapshot() : state, connectionCount: network.connections.size, stats: view.stats() }),
       stats: () => ({ ...view.stats(), fps, audioVoices: sound.voices.length }),
       resetSamples: () => { samples.length = 0; recording = true; }, samples: () => samples.slice(),
       setQuality: q => view.setQuality(q),
@@ -138,6 +145,15 @@ async function boot() {
       setInput: value => { if (world) world.setInput('host', value); },
       destroyRemote: () => { const s = world && [...world.ships.values()].find(s => !s.bot && s.id !== 'host'); if (s) { s.invulnerable = 0; world.hurt(s, 100, world.ships.get('host')); } },
       simulateMatchEnd: () => { if (world) { world.score.fleet = 25; world.tick(); } },
+      project: (x, z) => view.sector.project(x, 0, z),
+      combatScenario: () => {
+        if (mode === 'menu') start('solo');
+        if (!world) return false;
+        for (const s of [...world.ships.values()]) if (s.bot) world.remove(s.id);
+        const me = world.ships.get('host'); Object.assign(me, { x: -94, z: 32, vx: 0, vz: 0, hp: 100, invulnerable: 0 });
+        for (let i = 0; i < 4; i++) { const bot = world.add(`encounter-${i}`, { name: i === 3 ? 'Escort' : 'Sentinel', faction: i === 3 ? me.faction : me.faction === 'fleet' ? 'armada' : 'fleet' }, true); Object.assign(bot, { x: i === 3 ? -120 : -120 + i * 32, z: i === 3 ? 54 : 89 + i * 12, invulnerable: 0, angle: Math.PI }); }
+        world.bullets.length = 0; state = world.snapshot(); frozen = false; return true;
+      },
       leave
     };
     requestAnimationFrame(frame);

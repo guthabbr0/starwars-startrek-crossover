@@ -44,6 +44,10 @@ jobs:
         env:
           BASE_URL: https://starwars-startrek.vercel.app
         run: node tests/review.mjs
+      - name: Verify live Broken Horizon combat and screenshots
+        env:
+          BASE_URL: https://starwars-startrek.vercel.app
+        run: node tests/horizon.mjs
       - name: Publish test summary
         if: always()
         env:
@@ -75,5 +79,12 @@ jobs:
         with:
           name: playwright-development-review
           path: reports/review/
+          retention-days: 14
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: broken-horizon-production-evidence
+          path: reports/horizon/
           retention-days: 14
           if-no-files-found: warn
