@@ -1,0 +1,28 @@
+name: Dependency and build check
+on:
+  push:
+    paths:
+      - package.json
+      - .github/workflows/dependency-check.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-fund
+      - name: Record dependency tree
+        run: npm ls --all > dependency-tree.txt
+      - name: Package dependencies for reproducible local verification
+        run: tar -czf dependencies.tar.gz node_modules package-lock.json dependency-tree.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verification-dependencies
+          path: dependencies.tar.gz
+          retention-days: 3
