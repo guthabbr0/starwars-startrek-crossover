@@ -12,7 +12,7 @@ on:
       - package-lock.json
       - vite.config.js
       - vercel.json
-      - .github/workflows/verify.yml
+      - .github/workflows/**
   pull_request:
     branches: [main]
   workflow_dispatch:
