@@ -36,6 +36,27 @@ try {
   });
   await check('Wide tactical view and readable HUD are present', async () => { for (let i = 0; i < 5; i++) await p.click('#zoom-out'); await p.waitForTimeout(900); assert.ok(await p.locator('#target-readout').isVisible()); assert.ok(await p.locator('#combat-banner').isVisible()); await p.screenshot({ path: `${out}/04-wide-sector.png` }); return await p.evaluate(() => __gameDebug.stats()); });
   await ctx.tracing.stop({ path: `${out}/desktop-trace.zip` }); await ctx.close();
+  await check('An outdated client is rejected instead of joining incompatible balance rules', async () => {
+    const hc = await browser.newContext(), gc = await browser.newContext();
+    await gc.addInitScript(() => {
+      const original = RTCDataChannel.prototype.send;
+      RTCDataChannel.prototype.send = function(data) {
+        try { const text = typeof data === 'string' ? data : data instanceof ArrayBuffer || ArrayBuffer.isView(data) ? new TextDecoder().decode(data) : ''; const p = JSON.parse(text); if (p.type === 'hello') { p.protocol = 'legacy-2'; const encoded = JSON.stringify(p); data = typeof data === 'string' ? encoded : new TextEncoder().encode(encoded); window.__protocolFaultInjected = true; } } catch {}
+        return original.call(this, data);
+      };
+    });
+    const hp = await hc.newPage(), gp = await gc.newPage();
+    try {
+      await hp.goto(base); await hp.waitForFunction(() => window.__gameDebug?.ready); await hp.click('#host-btn');
+      await hp.waitForFunction(() => __gameDebug.state().mode === 'host', null, { timeout: 25000 });
+      const code = await hp.evaluate(() => __gameDebug.state().code);
+      await gp.goto(base); await gp.waitForFunction(() => window.__gameDebug?.ready); await gp.fill('#room-input', code); await gp.click('#join-btn');
+      await gp.waitForFunction(() => document.getElementById('status-text').textContent.includes('Update required'), null, { timeout: 25000 });
+      assert.equal(await gp.evaluate(() => __gameDebug.state().mode), 'menu'); assert.equal(await gp.evaluate(() => window.__protocolFaultInjected), true);
+      await hp.waitForFunction(() => __gameDebug.state().connectionCount === 0);
+      return { fault: 'Only this test browser rewrites hello.protocol to legacy-2; actual WebRTC signalling and host validation are used.' };
+    } finally { await hc.close(); await gc.close(); }
+  });
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true }); const m = await mobile.newPage(); m.on('pageerror', e => errors.push(e.message)); await m.goto(base); await m.waitForFunction(() => window.__gameDebug?.ready); await m.selectOption('#quality-select', 'low'); await m.click('#solo-btn');
   await check('Mobile touch controls and zoom remain usable', async () => { assert.ok(await m.locator('#move-stick').isVisible()); assert.ok(await m.locator('#zoom-out').isVisible()); await m.tap('#zoom-out'); await m.evaluate(() => __gameDebug.combatScenario()); await m.waitForTimeout(1200); await m.screenshot({ path: `${out}/05-mobile-combat.png` }); assert.ok(await m.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)); });
   await mobile.close(); await check('No uncaught JavaScript errors in the new combat paths', async () => assert.deepEqual(errors, []));
